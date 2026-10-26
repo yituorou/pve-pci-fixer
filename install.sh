@@ -10,8 +10,20 @@ NC='\033[0m' # 无颜色
 APP_NAME="pve-pci-fixer"
 INSTALL_DIR="/usr/local/bin"
 CONF_DIR="/etc/pve-pci-fixer"
-# 已修正为你的真实 v0.1.0 Tag 地址
-BINARY_URL="https://github.com/jeff141/pve-pci-fixer/releases/download/v0.1.0/pve-pci-fixer"
+REPO="yituorou/pve-pci-fixer"
+# 默认安装最新 Release；可通过环境变量指定版本，例如：VERSION=v0.2.0 bash install.sh
+VERSION="${VERSION:-latest}"
+# 国内网络可通过 GitHub 加速代理下载，例如：GH_PROXY=https://ghfast.top/ bash install.sh
+GH_PROXY="${GH_PROXY:-}"
+if [ -n "$GH_PROXY" ] && [ "${GH_PROXY%/}" = "$GH_PROXY" ]; then
+    GH_PROXY="$GH_PROXY/"
+fi
+if [ "$VERSION" = "latest" ]; then
+    # releases/latest/download/<asset> 由 GitHub 自动跳转到最新版本，直连和代理都适用
+    BINARY_URL="${GH_PROXY}https://github.com/$REPO/releases/latest/download/$APP_NAME"
+else
+    BINARY_URL="${GH_PROXY}https://github.com/$REPO/releases/download/$VERSION/$APP_NAME"
+fi
 SERVICE_PATH="/etc/systemd/system/$APP_NAME.service"
 
 echo -e "${BLUE}>>> Starting PvePciFixer Installation...${NC}"
@@ -26,21 +38,35 @@ fi
 mkdir -p $CONF_DIR
 
 # 3. 下载并赋权
-echo -e "${BLUE}[1/4]${NC} Downloading binary from GitHub (v0.1.0)..."
-curl -L $BINARY_URL -o $INSTALL_DIR/$APP_NAME
-if [ $? -ne 0 ]; then
-    echo -e "${RED}[Error]${NC} 下载失败，请检查网络或 URL 是否有效"
+echo -e "${BLUE}[1/4]${NC} Downloading binary from GitHub ($REPO, $VERSION)${GH_PROXY:+ via $GH_PROXY}..."
+# 先下载到临时目录，校验通过后再替换，避免升级时覆盖正在运行的二进制 (Text file busy)
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
+if ! curl -fL "$BINARY_URL" -o "$TMP_DIR/$APP_NAME"; then
+    echo -e "${RED}[Error]${NC} 下载失败，请检查网络或版本号 ($VERSION) 是否存在"
     exit 1
 fi
 
 # 检查下载的文件大小，防止下载到 404 文本
-FILE_SIZE=$(stat -c%s "$INSTALL_DIR/$APP_NAME")
+FILE_SIZE=$(stat -c%s "$TMP_DIR/$APP_NAME")
 if [ $FILE_SIZE -lt 1000 ]; then
     echo -e "${RED}[Error]${NC} 下载的文件异常小 ($FILE_SIZE bytes)，可能是链接已失效。"
     exit 1
 fi
 
-chmod +x $INSTALL_DIR/$APP_NAME
+# 校验 SHA-256 (v0.2.0 起的 Release 附带 .sha256 文件)
+if curl -fsSL "$BINARY_URL.sha256" -o "$TMP_DIR/$APP_NAME.sha256"; then
+    if ! (cd "$TMP_DIR" && sha256sum -c "$APP_NAME.sha256" >/dev/null); then
+        echo -e "${RED}[Error]${NC} SHA-256 校验失败，已中止安装"
+        exit 1
+    fi
+    echo -e "${GREEN}[OK]${NC} SHA-256 校验通过"
+else
+    echo -e "${BLUE}[Info]${NC} 该版本未提供 .sha256，跳过校验"
+fi
+
+install -m 755 "$TMP_DIR/$APP_NAME" "$INSTALL_DIR/$APP_NAME"
+echo -e "${GREEN}[OK]${NC} 已安装 $APP_NAME $VERSION"
 
 # 4. 初始化默认配置
 echo -e "${BLUE}[2/4]${NC} Creating default config.yml..."

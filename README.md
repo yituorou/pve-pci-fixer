@@ -14,6 +14,15 @@
 - ✅ **轻量安全**：Rust 编写，单文件运行，不修改系统底层，仅修正 `.conf` 文本。
 
 ### 快速安装 (推荐)
-在 PVE 终端执行以下命令，即可全自动完成下载、安装、配置服务及开机自启：
+在 PVE 终端执行以下命令，即可全自动完成下载、安装、配置服务及开机自启（默认安装最新版本）：
 ```bash
- curl -sSL https://gitee.com/JeffStudio/pve-pci-fixer/raw/master/install.sh | bash 
+curl -sSL https://ghfast.top/https://raw.githubusercontent.com/yituorou/pve-pci-fixer/master/install.sh | GH_PROXY=https://ghfast.top/ bash
+```
+
+- 命令通过 GitHub 加速代理 `ghfast.top` 下载，适合国内网络。若该代理不可用，把命令中两处 `https://ghfast.top/` 换成其他 GitHub 加速代理即可。
+- 能直连 GitHub 时可不使用代理：
+  ```bash
+  curl -sSL https://raw.githubusercontent.com/yituorou/pve-pci-fixer/master/install.sh | bash
+  ```
+- 安装指定版本：在 `bash` 前加上 `VERSION=v0.2.0`。
+- 升级：重新执行安装命令即可，已有的 `config.yml` 会保留。

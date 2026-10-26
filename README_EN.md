@@ -17,4 +17,4 @@ A lightweight automation tool for Proxmox VE (PVE) users to solve "PCI BDF Drift
 Run the following command in your PVE terminal to install and enable the service automatically:
 
 ```bash
- curl -sSL https://raw.githubusercontent.com/jeff141/pve-pci-fixer/master/install.sh | bash 
+ curl -sSL https://raw.githubusercontent.com/yituorou/pve-pci-fixer/master/install.sh | bash 

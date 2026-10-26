@@ -2,7 +2,7 @@
  * PvePciFixer - A Proxmox VE PCI BDF Drift Fixer
  * Copyright (C) 2026 一坨肉 (OneTuRou)
  * * This program is licensed under the MIT License.
- * GitHub: https://github.com/jeff141/pve-pci-fixer
+ * GitHub: https://github.com/yituorou/pve-pci-fixer
  */
 use axum::{routing::{get, post}, Json, Router};
 use regex::Regex;
@@ -329,6 +329,12 @@ async fn api_unbind(Json(payload): Json<UnbindRequest>) -> String {
 
 #[tokio::main]
 async fn main() {
+    // --version：只打印版本号后退出（install.sh 用它显示安装结果）
+    if std::env::args().any(|a| a == "--version" || a == "-V") {
+        println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     println!(">>> PvePciFixer 正在启动...");
 
     let version = env!("CARGO_PKG_VERSION");
