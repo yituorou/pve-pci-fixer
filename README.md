@@ -26,3 +26,4 @@ curl -sSL https://ghfast.top/https://raw.githubusercontent.com/yituorou/pve-pci-
   ```
 - 安装指定版本：在 `bash` 前加上 `VERSION=v0.2.0`。
 - 升级：重新执行安装命令即可，已有的 `config.yml` 会保留。
+
