@@ -95,14 +95,38 @@ fn get_current_pci_list(config: &Config) -> Vec<(String, String)> {
 
 // --- 核心修复逻辑 ---
 
+/// 等待 pmxcfs (pve-cluster) 把 /etc/pve 挂载好。
+/// 开机早期 /etc/pve 只是一个空目录，此时读不到任何 VM 配置，修复会被静默跳过。
+fn wait_for_pmxcfs(timeout_secs: u64) -> bool {
+    let marker = std::path::Path::new("/etc/pve/.version");
+    for _ in 0..timeout_secs {
+        if marker.exists() && std::path::Path::new(PROD_CONF_DIR).is_dir() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+    false
+}
+
 fn do_fix_logic() -> String {
     let mut log = String::new();
     if !std::path::Path::new(CONFIG_YML).exists() {
         return "等待配置：config.yml 尚不存在。".to_string();
     }
 
-    let config_str = fs::read_to_string(CONFIG_YML).expect("读取 YAML 失败");
-    let config: Config = serde_yaml::from_str(&config_str).expect("解析 YAML 失败");
+    let config_str = match fs::read_to_string(CONFIG_YML) {
+        Ok(s) => s,
+        Err(e) => return format!("错误：读取 config.yml 失败，本次未执行修复 - {}", e),
+    };
+    // 配置有误时只记录错误，不 panic，保证 Web 面板仍能启动以便修复配置
+    let config: Config = match serde_yaml::from_str(&config_str) {
+        Ok(c) => c,
+        Err(e) => return format!("错误：config.yml 解析失败，本次未执行修复 - {}", e),
+    };
+
+    if config.mode != "dev" && !wait_for_pmxcfs(60) {
+        return "错误：等待 /etc/pve (pmxcfs) 挂载超时，本次未执行修复。".to_string();
+    }
 
     let current_pci_map = get_current_pci_list(&config);
     let base_path = if config.mode == "dev" { DEV_CONF_DIR } else { PROD_CONF_DIR };
@@ -184,7 +208,11 @@ async fn api_get_vms() -> Json<Vec<VMInfo>> {
 
 async fn api_save_bind(Json(payload): Json<BindRequest>) -> String {
     let mut config: Config = if let Ok(s) = fs::read_to_string(CONFIG_YML) {
-        serde_yaml::from_str(&s).unwrap_or(Config { mode: "prod".into(), enable_web: true, targets: vec![] })
+        // 解析失败时拒绝保存，避免用空配置覆盖用户已有的绑定
+        match serde_yaml::from_str(&s) {
+            Ok(c) => c,
+            Err(e) => return format!("错误：config.yml 解析失败，请先修复配置 - {}", e),
+        }
     } else {
         Config { mode: "prod".into(), enable_web: true, targets: vec![] }
     };
@@ -320,6 +348,11 @@ async fn main() {
 
     // 启动即执行一次修复
     println!("{}", do_fix_logic());
+
+    // --fix-only：只修复一次然后退出，供 systemd ExecStartPre 在 pve-guests 之前同步执行
+    if std::env::args().any(|a| a == "--fix-only") {
+        return;
+    }
 
     let app = Router::new()
         // ✅ 修正:只保留这一个 /api/pci 处理逻辑

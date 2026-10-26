@@ -57,11 +57,18 @@ echo -e "${BLUE}[3/4]${NC} Configuring Systemd service..."
 cat <<EOF > $SERVICE_PATH
 [Unit]
 Description=PVE PCI Address Fixer Service
-After=network.target
+# /etc/pve 由 pve-cluster (pmxcfs) 挂载，必须等它就绪
+Wants=pve-cluster.service
+After=network.target pve-cluster.service
+# 必须在 PVE 自动启动虚拟机之前完成修复
+Before=pve-guests.service
 
 [Service]
 Type=simple
 WorkingDirectory=$CONF_DIR
+# ExecStartPre 同步执行，完成后本服务才算启动，pve-guests 会等待它
+ExecStartPre=$INSTALL_DIR/$APP_NAME --fix-only
+TimeoutStartSec=120
 ExecStart=$INSTALL_DIR/$APP_NAME
 Restart=always
 RestartSec=10
